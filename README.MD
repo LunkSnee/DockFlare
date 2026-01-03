@@ -65,6 +65,7 @@ For comprehensive documentation, please refer to the official project website:
 - **[Quick Start Guide](https://dockflare.app/docs)** - Step-by-step guide to get up and running.
 - **[Label Reference](https://dockflare.app/docs/container-labels)** - Detailed information on all available Docker labels.
 - **[Advanced Configuration](https://dockflare.app/docs/managing-dns-zones)** - Details on multi-zone setups, external mode, and more.
+- **[Environment Variables Reference](dockflare/app/templates/docs/Environment-Variables.md)** - A full listing of supported environment variables (defaults and descriptions).
 
 ### Prerequisites
 
@@ -181,9 +182,6 @@ docker network create cloudflare-net
 3.  **Complete the Pre-Flight Setup**: Open `http://your-server-ip:5000` in your browser. You will be guided through a one-time setup wizard to enter your Cloudflare credentials and create a password for the UI.
 
 4.  **For Existing Users**: If you are upgrading, DockFlare will detect your old `.env` file and automatically guide you through a quick migration process.
-
-
-🔧 **Environment variables reference**: See `dockflare/app/templates/docs/Environment-Variables.md` for a full listing of supported environment variables (defaults and descriptions).
 
 The master now runs as the unprivileged `dockflare` user (UID/GID 65532) and only talks to Docker through the bundled socket proxy. If you bind-mount a host directory instead of using the named volume above, make sure it is writable by that UID/GID or adjust the `DOCKFLARE_UID`/`DOCKFLARE_GID` build args.
 
