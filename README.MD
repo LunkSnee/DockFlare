@@ -182,6 +182,9 @@ docker network create cloudflare-net
 
 4.  **For Existing Users**: If you are upgrading, DockFlare will detect your old `.env` file and automatically guide you through a quick migration process.
 
+
+🔧 **Environment variables reference**: See `dockflare/app/templates/docs/Environment-Variables.md` for a full listing of supported environment variables (defaults and descriptions).
+
 The master now runs as the unprivileged `dockflare` user (UID/GID 65532) and only talks to Docker through the bundled socket proxy. If you bind-mount a host directory instead of using the named volume above, make sure it is writable by that UID/GID or adjust the `DOCKFLARE_UID`/`DOCKFLARE_GID` build args.
 
 💡 *Need to manage workloads on additional hosts?* Deploy the [DockFlare Agent](https://github.com/ChrispyBacon-dev/DockFlare-Agent-prd) next to your containers, enrol it from the master UI, and let DockFlare orchestrate the tunnels for you. Both the master and agent images run as the non-root `dockflare` user by default, so align your volume permissions or override the build args if required. A full guide is available in the new [Multi-Server Agent](dockflare/app/templates/docs/Multi-Server-Agent.md) documentation.
