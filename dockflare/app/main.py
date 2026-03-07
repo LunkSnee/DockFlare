@@ -33,7 +33,7 @@ from app.core.tunnel_manager import (
     update_cloudflared_container_status, 
     start_cloudflared_container
 )
-from app.core.docker_handler import docker_event_listener, process_container_start
+from app.core.docker_handler import start_event_listeners, process_container_start
 from app.core.reconciler import cleanup_expired_rules, reconcile_state_threaded
 
 stop_event = threading.Event()
@@ -72,9 +72,9 @@ def run_all_background_tasks():
             logging.warning("Managed tunnel not fully initialized (ID/token missing). Background tasks needing tunnel ID may fail.")
 
         if tunnel_ready_for_tasks:
-            logging.info("Starting core background task threads (Docker Listener, Cleanup Task)...")
-            event_thread = threading.Thread(target=docker_event_listener, args=(stop_event,), name="DockerEventListener", daemon=True)
-            threads_to_start.append(event_thread)
+            logging.info("Starting core background task threads (Docker Listeners, Cleanup Task)...")
+            event_threads = start_event_listeners(stop_event)
+            threads_to_start.extend(event_threads)
             
             cleanup_thread = threading.Thread(target=cleanup_expired_rules, args=(stop_event,), name="CleanupTask", daemon=True)
             threads_to_start.append(cleanup_thread)

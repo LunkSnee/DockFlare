@@ -126,6 +126,16 @@
                             </div>
 
                             <div class="form-control w-full sm:w-auto">
+                                <label for="group-select" class="label py-0 pb-1"><span class="label-text text-xs font-semibold opacity-70">Group by</span></label>
+                                <select id="group-select" class="select select-bordered select-sm w-full">
+                                    <option value="none">None</option>
+                                    <option value="status">Status</option>
+                                    <option value="tunnel">Tunnel</option>
+                                    <option value="access-policy">Access Policy</option>
+                                </select>
+                            </div>
+
+                            <div class="form-control w-full sm:w-auto">
                                  <label for="search-input" class="label py-0 pb-1"><span class="label-text text-xs font-semibold opacity-70">Search Hostname</span></label>
                                 <div class="relative">
                                     <span class="absolute inset-y-0 left-0 flex items-center pl-3">
@@ -203,6 +213,9 @@
                                            {% if details.disable_chunked_encoding %}
                                                <span class="badge badge-info badge-xs ml-1" title="Chunked transfer encoding disabled for HTTP/1.1">No Chunked Encoding</span>
                                            {% endif %}
+                                           {% if details.match_sni_to_host %}
+                                               <span class="badge badge-info badge-xs ml-1" title="Cloudflare will match TLS SNI to the public hostname">Match SNI to Host</span>
+                                           {% endif %}
                                        </div>
                                    </td>
                                    <td class="p-3 whitespace-nowrap">
@@ -227,7 +240,7 @@
                                                 {{ details.access_policy_type.replace('_', ' ') }}
                                             </span>
                                         {% elif details.get('status') == 'active' %} 
-                                            <span class="opacity-60 italic">None (Public)</span>
+                                            <span class="opacity-60 italic">No Policy Assigned</span>
                                         {% else %}
                                             <span class="text-xs opacity-50">N/A</span>
                                         {% endif %}
@@ -270,11 +283,7 @@
                                                 {% set public_index = public_hostname_indices.get(display_hostname_lc) if public_hostname_indices else None %}
                                                 {% if ACCOUNT_ID_FOR_DISPLAY and ACCOUNT_ID_FOR_DISPLAY != "Not Configured" and effective_tunnel_id and display_hostname %}
                                                 <li>
-                                                    {% if public_index is not none %}
-                                                    <a href="https://one.dash.cloudflare.com/{{ ACCOUNT_ID_FOR_DISPLAY }}/networks/tunnels/{{ effective_tunnel_id }}/public-hostname/{{ display_hostname }}/{{ public_index }}" target="_blank" rel="noopener noreferrer">
-                                                    {% else %}
-                                                    <a href="https://one.dash.cloudflare.com/{{ ACCOUNT_ID_FOR_DISPLAY }}/networks/tunnels/{{ effective_tunnel_id }}/public-hostname/{{ display_hostname }}" target="_blank" rel="noopener noreferrer">
-                                                    {% endif %}
+                                                    <a href="https://one.dash.cloudflare.com/{{ ACCOUNT_ID_FOR_DISPLAY }}/networks/connectors/cloudflare-tunnels/{{ effective_tunnel_id }}/public-hostname/{{ display_hostname }}/{{ public_index if public_index is not none else 0 }}" target="_blank" rel="noopener noreferrer">
                                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                                                         </svg>
@@ -284,7 +293,7 @@
                                                 {% endif %}
                                                 {% if details.access_app_id and ACCOUNT_ID_FOR_DISPLAY and ACCOUNT_ID_FOR_DISPLAY != "Not Configured" %}
                                                 <li>
-                                                    <a href="https://one.dash.cloudflare.com/{{ ACCOUNT_ID_FOR_DISPLAY }}/access/apps/self-hosted/{{ details.access_app_id }}/edit?tab=basic-info" target="_blank" rel="noopener noreferrer">
+                                                    <a href="https://one.dash.cloudflare.com/{{ ACCOUNT_ID_FOR_DISPLAY }}/access-controls/apps/self-hosted/{{ details.access_app_id }}/edit?tab=basic-info" target="_blank" rel="noopener noreferrer">
                                                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
                                                             <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                                                         </svg>
@@ -462,7 +471,7 @@
                                         <span class="label-text font-medium">2. Configure Manually</span>
                                     </label>
                                     <select name="manual_access_policy_type" id="manual_access_policy_type" class="select select-bordered w-full policy-type-select">
-                                        <option value="none" selected>None (Public - No App)</option>
+                                        <option value="none" selected>No Policy Assigned</option>
                                         <option value="bypass">Bypass (Public App)</option>
                                     </select>
                                 </div>
@@ -522,6 +531,13 @@
                             <span class="label-text">Disable Chunked Encoding</span>
                           </label>
                           <div class="text-xs opacity-60 ml-8">Disables chunked transfer encoding over HTTP/1.1. Useful for WSGI servers (Flask, Django) and other origins that don't support chunked requests. (Only applies to HTTP/HTTPS services).</div>
+                        </div>
+                        <div id="manual_match_sni_to_host_div" class="form-control">
+                          <label class="label cursor-pointer justify-start gap-2">
+                            <input type="checkbox" name="manual_match_sni_to_host" id="manual_match_sni_to_host" class="checkbox checkbox-sm" />
+                            <span class="label-text">Match SNI to Host</span>
+                          </label>
+                          <div class="text-xs opacity-60 ml-8">Makes Cloudflare use the public hostname as TLS SNI for origin connections. (Only applies to HTTP/HTTPS services).</div>
                         </div>
                     </div>
                 </div>
@@ -626,7 +642,7 @@
                                         <span class="label-text font-medium">2. Configure Manually</span>
                                     </label>
                                     <select name="edit_access_policy_type" id="edit_manual_access_policy_type" class="select select-bordered w-full policy-type-select">
-                                        <option value="none">None (Public - No App)</option>
+                                        <option value="none">No Policy Assigned</option>
                                         <option value="bypass">Bypass (Public App)</option>
                                     </select>
                                 </div>
@@ -674,6 +690,13 @@
                           </label>
                           <div class="text-xs opacity-60 ml-8">Disables chunked transfer encoding over HTTP/1.1. Useful for WSGI servers (Flask, Django) and other origins that don't support chunked requests. (Only applies to HTTP/HTTPS services).</div>
                         </div>
+                        <div id="edit_match_sni_to_host_div" class="form-control">
+                          <label class="label cursor-pointer justify-start gap-2">
+                            <input type="checkbox" name="edit_match_sni_to_host" id="edit_match_sni_to_host" class="checkbox checkbox-sm" />
+                            <span class="label-text">Match SNI to Host</span>
+                          </label>
+                          <div class="text-xs opacity-60 ml-8">Makes Cloudflare use the public hostname as TLS SNI for origin connections. (Only applies to HTTP/HTTPS services).</div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-action mt-8 pt-4 border-t border-base-300">
@@ -706,6 +729,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusFilter = document.getElementById('status-filter');
     const tunnelFilter = document.getElementById('tunnel-filter');
     const sortSelect = document.getElementById('sort-select');
+    const groupSelect = document.getElementById('group-select');
     const searchInput = document.getElementById('search-input');
     const filterStats = document.getElementById('filter-stats');
     const tableBody = document.querySelector('tbody');
@@ -898,10 +922,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function updateDisplay() {
         tableBody.innerHTML = '';
+        const groupValue = groupSelect ? groupSelect.value : 'none';
+        if (groupValue === 'none') {
+            filteredRows.forEach(row => {
+                tableBody.appendChild(row);
+            });
+            return;
+        }
 
+        const groups = new Map();
         filteredRows.forEach(row => {
-            tableBody.appendChild(row);
+            const group = getGroupForRow(row, groupValue);
+            if (!groups.has(group.key)) {
+                groups.set(group.key, { label: group.label, rows: [] });
+            }
+            groups.get(group.key).rows.push(row);
         });
+
+        groups.forEach(group => {
+            const headerRow = document.createElement('tr');
+            headerRow.className = 'bg-base-200/70';
+            const headerCell = document.createElement('td');
+            headerCell.colSpan = 8;
+            headerCell.className = 'p-3 text-xs font-semibold uppercase tracking-wide opacity-80';
+            headerCell.textContent = `${group.label} (${group.rows.length})`;
+            headerRow.appendChild(headerCell);
+            tableBody.appendChild(headerRow);
+            group.rows.forEach(row => {
+                tableBody.appendChild(row);
+            });
+        });
+    }
+
+    function getStatusGroup(row) {
+        const status = (row.dataset.ruleStatus || '').trim();
+        if (!status) {
+            return { key: 'unknown', label: 'Status: Unknown' };
+        }
+        return { key: status.toLowerCase(), label: `Status: ${status.replace(/_/g, ' ')}` };
+    }
+
+    function getTunnelGroup(row) {
+        const tunnel = row.querySelector('[data-role="tunnel-name"]')?.dataset?.tunnelName?.trim() || '';
+        if (!tunnel) {
+            return { key: 'no-tunnel', label: 'Tunnel: N/A' };
+        }
+        return { key: tunnel.toLowerCase(), label: `Tunnel: ${tunnel}` };
+    }
+
+    function getAccessPolicyGroup(row) {
+        const accessPolicyRaw = row.querySelector('td:nth-child(6)')?.textContent || '';
+        const accessPolicy = accessPolicyRaw.replace(/\s+/g, ' ').trim();
+        if (!accessPolicy) {
+            return { key: 'no-policy', label: 'Access Policy: N/A' };
+        }
+        return { key: accessPolicy.toLowerCase(), label: `Access Policy: ${accessPolicy}` };
+    }
+
+    function getGroupForRow(row, groupValue) {
+        if (groupValue === 'status') return getStatusGroup(row);
+        if (groupValue === 'tunnel') return getTunnelGroup(row);
+        if (groupValue === 'access-policy') return getAccessPolicyGroup(row);
+        return { key: 'all', label: 'All Rules' };
     }
 
     function updateStats() {
@@ -916,6 +998,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (statusFilter) statusFilter.addEventListener('change', applyFilters);
     if (tunnelFilter) tunnelFilter.addEventListener('change', applyFilters);
     if (sortSelect) sortSelect.addEventListener('change', applyFilters);
+    if (groupSelect) groupSelect.addEventListener('change', applyFilters);
     if (searchInput) searchInput.addEventListener('input', applyFilters);
 
     initializeFilters();

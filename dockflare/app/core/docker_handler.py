@@ -20,6 +20,7 @@ import time
 import requests
 import copy 
 import re
+import threading
 from docker.errors import NotFound, APIError
 from flask import current_app
 
@@ -525,102 +526,99 @@ def schedule_container_stop(container_id_val):
                 save_state()
                 publish_state_event('snapshot_refresh')
 
-def docker_event_listener(stop_event_param): 
+def docker_event_listener(stop_event_param, label_prefix):
     if not docker_client:
-        logging.error("Docker client unavailable, event listener cannot start.")
+        logging.error(f"Docker client unavailable, event listener for {label_prefix} cannot start.")
         return
 
-    logging.info("Starting Docker event listener...")
+    logging.info(f"Starting Docker event listener for label prefix: {label_prefix}")
     error_count = 0
     max_errors = 5
-        
+
     if stop_event_param is None:
-        logging.error("docker_event_listener called with None stop_event_param. Listener will not run correctly.")
-        return 
+        logging.error(f"docker_event_listener for {label_prefix} called with None stop_event_param. Listener will not run correctly.")
+        return
+
+    event_filters = {
+        "type": "container",
+        "label": f"{label_prefix}enable"
+    }
 
     while not stop_event_param.is_set() and error_count < max_errors:
         try:
-            logging.info("Connecting to Docker event stream...")
-            events = docker_client.events(decode=True, since=int(time.time()))
-            logging.info("Successfully connected to Docker event stream.")
-            error_count = 0 
+            logging.info(f"Connecting to Docker event stream for {label_prefix}...")
+            events = docker_client.events(decode=True, since=int(time.time()), filters=event_filters)
+            logging.info(f"Successfully connected to Docker event stream for {label_prefix}.")
+            error_count = 0
 
             for event in events:
                 if stop_event_param.is_set():
-                    logging.info("Stop event received in listener, exiting loop.")
+                    logging.info(f"Stop event received in listener for {label_prefix}, exiting loop.")
                     break
 
-                ev_type = event.get("Type")
                 action = event.get("Action")
                 actor = event.get("Actor", {})
                 cont_id = actor.get("ID")
-                
-                logging.debug(f"Docker Event: Type={ev_type}, Action={action}, ID={cont_id[:12] if cont_id else 'N/A'}")
 
-                if ev_type == "container" and cont_id:
+                logging.debug(f"Docker Event ({label_prefix}): Action={action}, ID={cont_id[:12] if cont_id else 'N/A'}")
+
+                if cont_id:
                     if action == "start":
-                        container_instance = None
-                        for attempt in range(3): 
-                            try:
-                                container_instance = docker_client.containers.get(cont_id)
-                                container_instance.reload() # Reload to get fresh labels
-                                
-                                if get_label(container_instance.labels, "enable"):
-                                    logging.debug(f"Container {cont_id[:12]} details retrieved on attempt {attempt+1}.")
-                                    break
-                                else:
-                                    logging.debug(f"Container {cont_id[:12]} found but key 'enable' label missing, retrying ({attempt+1}/3)...")
-                            except NotFound:
-                                logging.debug(f"Container {cont_id[:12]} not found on attempt {attempt+1}, retrying...")
-                            except APIError as e_get_cont:
-                                logging.error(f"Docker API error getting container {cont_id[:12]} on attempt {attempt+1}: {e_get_cont}")
-                                break
-                            except requests.exceptions.ConnectionError as e_conn_cont:
-                                logging.error(f"Docker connection error getting container {cont_id[:12]}: {e_conn_cont}")
-                                raise 
-                            except Exception as e_unexp_cont:
-                                logging.error(f"Unexpected error getting container {cont_id[:12]} details: {e_unexp_cont}", exc_info=True)
-                                break
-                            
-                            if attempt < 2:
-                                time.sleep(0.2 * (attempt + 1))
-                            else:
-                                logging.warning(f"Failed to get container {cont_id[:12]} details or key 'enable' label after multiple attempts.")
-                        
-                        if container_instance:
-                            try:
-                                process_container_start(container_instance)
-                            except Exception as e_proc_start: 
-                                logging.error(f"Error processing start event for {cont_id[:12]}: {e_proc_start}", exc_info=True)
-                        
+                        try:
+                            container_instance = docker_client.containers.get(cont_id)
+                            process_container_start(container_instance)
+                        except NotFound:
+                            logging.warning(f"Container {cont_id[:12]} not found despite 'start' event for {label_prefix}.")
+                        except APIError as e_get_cont:
+                            logging.error(f"Docker API error getting container {cont_id[:12]} for {label_prefix}: {e_get_cont}")
+                        except Exception as e_proc_start:
+                            logging.error(f"Error processing start event for {cont_id[:12]} from {label_prefix}: {e_proc_start}", exc_info=True)
+
                     elif action in ["stop", "die", "destroy", "kill"]:
                         try:
                             schedule_container_stop(cont_id)
-                        except Exception as e_proc_stop: 
-                            logging.error(f"Error processing stop/die/destroy/kill event for {cont_id[:12]}: {e_proc_stop}", exc_info=True)
-        
-        except requests.exceptions.ConnectionError as e_conn_stream: 
+                        except Exception as e_proc_stop:
+                            logging.error(f"Error processing stop/die/destroy/kill event for {cont_id[:12]} from {label_prefix}: {e_proc_stop}", exc_info=True)
+
+        except requests.exceptions.ConnectionError as e_conn_stream:
             error_count += 1
-            logging.error(f"Docker listener connection error: {e_conn_stream}. Reconnecting ({error_count}/{max_errors})...")
+            logging.error(f"Docker listener ({label_prefix}) connection error: {e_conn_stream}. Reconnecting ({error_count}/{max_errors})...")
             if not stop_event_param.is_set():
                 stop_event_param.wait(min(30, 2 * error_count))
         except APIError as e_api_stream:
             error_count += 1
-            logging.error(f"Docker listener API error: {e_api_stream}. Reconnecting ({error_count}/{max_errors})...")
+            logging.error(f"Docker listener ({label_prefix}) API error: {e_api_stream}. Reconnecting ({error_count}/{max_errors})...")
             if not stop_event_param.is_set():
                 stop_event_param.wait(min(30, 2 * error_count))
         except Exception as e_unexp_stream:
             error_count += 1
-            logging.error(f"Unexpected error in Docker event listener: {e_unexp_stream}. Reconnecting ({error_count}/{max_errors})...", exc_info=True)
+            logging.error(f"Unexpected error in Docker event listener ({label_prefix}): {e_unexp_stream}. Reconnecting ({error_count}/{max_errors})...", exc_info=True)
             if not stop_event_param.is_set():
                 stop_event_param.wait(min(30, 2 * error_count))
 
         if stop_event_param.is_set():
-            break 
+            break
 
     if error_count >= max_errors:
-        logging.error("Docker event listener stopping after multiple consecutive errors.")
-    logging.info("Docker event listener stopped.")
+        logging.error(f"Docker event listener for {label_prefix} stopping after multiple consecutive errors.")
+    logging.info(f"Docker event listener for {label_prefix} stopped.")
+
+def start_event_listeners(stop_event):
+    threads = []
+    
+    label_prefixes = list(set(filter(None, [
+        config.PRIMARY_LABEL_PREFIX,
+        config.LEGACY_LABEL_PREFIX,
+        config.CUSTOM_LABEL_PREFIX
+    ])))
+
+    for prefix in label_prefixes:
+        thread_name = f"DockerEventListener-{prefix.strip('.')}"
+        thread = threading.Thread(target=docker_event_listener, args=(stop_event, prefix), name=thread_name, daemon=True)
+        threads.append(thread)
+        logging.info(f"Created event listener thread for prefix: {prefix}")
+        
+    return threads
 def _detect_zone_for_hostname(hostname):
     if not hostname:
         return None, None

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [v3.0.7] - 2026-03-01
+
+### Added
+- **Manual Rule SNI Control:** Added a dedicated **Match SNI to Host** toggle for manual ingress rules (create/edit), persisted in DockFlare state and synchronized to Cloudflare tunnel `originRequest.matchSNIToHost`.
+- **UI-Managed Ingress Field Preservation:** Added a new **General Settings** option, **Preserve Unmanaged Cloudflare Ingress Fields**, allowing DockFlare to retain Cloudflare-side route fields it does not explicitly manage during tunnel sync.
+- **Tunnel Name Helper Text:** Added inline helper text on Setup and Settings pages clarifying that DockFlare automatically normalizes the entered tunnel name when deriving the local cloudflared container name.
+- **Ingress Rule Grouping in Dashboard:** Added a new **Group by** control in `Managed Ingress Rules` with grouping by **Status**, **Tunnel**, or **Access Policy**, including per-group row counts for easier navigation on large rule sets.
+
+### Fixed
+- **Cloudflare Dashboard Deep Links:** Updated Zero Trust links to match Cloudflare's latest navigation paths:
+  - Tunnel route links now use `.../networks/connectors/cloudflare-tunnels/.../public-hostname/.../{index}`
+  - Access application links now use `.../access-controls/apps/self-hosted/.../edit?tab=basic-info`
+  - Access policy links now use `.../access-controls/policies/.../edit`
+- **Tunnel Name Character Handling:** Fixed cloudflared agent startup failures caused by tunnel names containing Docker-invalid characters (for example spaces or parentheses) by sanitizing generated container names across setup, config load, and settings updates.
+
+---
+
+## [v3.0.6] - 2026-02-15
+
+### Fixed
+- **Docker Event Listener Efficiency:** Significantly reduced log spam and improved resource utilization by implementing filtered Docker event listeners. DockFlare now only processes container events (start/stop) for containers explicitly opted-in via `dockflare.enable` or the legacy `cloudflare.tunnel.enable` labels, preventing unnecessary inspection of unmanaged containers. Raised by issue #296
+
+### Changed
+- **Access Policy Label Rename:** Renamed the Access Policy label "None (Public - No App)" to "No Policy Assigned" in the Dashboard. This change accurately reflects that while no specific policy is assigned to the rule, the service might still be protected by a broader Zone Policy, removing the misleading "Public" designation.
+
+---
+
 ## [v3.0.5] - 2025-10-14
 
 ### Added
