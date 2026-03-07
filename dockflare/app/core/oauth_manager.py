@@ -17,6 +17,8 @@
 # dockflare/app/core/oauth_manager.py
 
 import logging
+import requests
+from requests.exceptions import RequestException
 
 
 def register_oauth_providers(flask_app, oauth_instance, fernet):
@@ -78,11 +80,24 @@ def register_oauth_providers(flask_app, oauth_instance, fernet):
                 logging.warning(f"Provider '{provider.get('name')}' is of type '{provider_type}' but is missing an issuer_url. It will be skipped.")
                 continue
 
-        if not issuer_url.endswith('/'):
-            issuer_url += '/'
+        issuer_url = (issuer_url or '').strip()
 
-        metadata_url = f"{issuer_url}.well-known/openid-configuration"
-
+        # Build metadata_url robustly: handle cases where the stored issuer_url
+        # already includes a .well-known path (or even the full openid-configuration URL).
+        if '.well-known' in issuer_url:
+            if 'openid-configuration' in issuer_url:
+                metadata_url = issuer_url
+            else:
+                if issuer_url.endswith('/'):
+                    metadata_url = issuer_url + 'openid-configuration'
+                else:
+                    metadata_url = issuer_url + '/openid-configuration'
+        else:
+            if not issuer_url.endswith('/'):
+                issuer_url += '/'
+            metadata_url = f"{issuer_url}.well-known/openid-configuration"
+            
+        # Validate metadata URL
         try:
             oauth_instance.register(
                 name=provider_id,

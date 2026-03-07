@@ -2320,7 +2320,8 @@ def login_provider(provider_id):
         callback_url = f"https://{public_hostname}{path}"
         logging.info(f"Constructed OAuth callback URL using public hostname: {callback_url}")
     else:
-        callback_url = url_for('web.auth_callback', provider_id=provider_id, _external=True)
+        # Force HTTPS for external callback URLs to avoid insecure http defaults
+        callback_url = url_for('web.auth_callback', provider_id=provider_id, _external=True, _scheme='https')
     return oauth.create_client(provider_id).authorize_redirect(callback_url, state=state_token)
 
 @bp.route('/auth/<provider_id>/callback')
